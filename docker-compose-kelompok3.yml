@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+
+  postgres-kelompok3:
+    image: postgres:15
+    container_name: postgres-kelompok3
+    ports:
+      - "5433:5432"       # host 5433 → container 5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data_kelompok3:/var/lib/postgresql/data
+      - ./data/raw:/docker-entrypoint-initdb.d
+
+  minio-kelompok3:
+    image: minio/minio
+    container_name: minio-kelompok3
+    ports:
+      - "9002:9000"       # host 9002 → container 9000
+      - "9003:9001"       # host 9003 → container 9001 (console)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data_kelompok3:/data
+
+  mc-kelompok3:
+    image: minio/mc
+    container_name: mc-kelompok3
+    depends_on:
+      - minio-kelompok3
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add local http://minio-kelompok3:9000 minioadmin minioadmin) do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb --ignore-existing local/datalake;
+      echo 'Bucket datalake siap';
+      exit 0;
+      "
+
+  jupyter-kelompok3:
+    image: jupyter/pyspark-notebook
+    container_name: jupyter-kelompok3
+    ports:
+      - "8889:8888"       # host 8889 → container 8888
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+    volumes:
+      - ./notebooks:/home/jovyan/work/notebooks
+      - ./data:/home/jovyan/work/data
+    depends_on:
+      - minio-kelompok3
+      - postgres-kelompok3
+
+volumes:
+  postgres_data_kelompok3:
+  minio_data_kelompok3:
